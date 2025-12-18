@@ -42,7 +42,7 @@ func (g *Game) Update() error { //game logic
 		size := randInt(340, 340)
 		g.data = make([]int, size)
 		for i := range g.data {
-			g.data[i] = randInt(1, 340)
+			g.data[i] = randInt(1, 280)
 		}
 		return nil
 	}
@@ -99,6 +99,7 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 }
 
 func main() {
+	ebiten.SetTPS(360)
 	ebiten.SetWindowSize(1280, 960)
 	ebiten.SetWindowTitle("Hello, World!")
 	if err := ebiten.RunGame(&Game{}); err != nil {

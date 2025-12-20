@@ -9,22 +9,26 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/audio/mp3"
 )
 
-const sampleRate = 44100
+const sampleRate = 104100
 
 type Game struct {
-  data []int
-  i, j int
-  sorted bool
+	data []int
+	i, j int
+	sorted bool
 
-  audioContext *audio.Context
-  soundFile    string
+	fillIndex int
+
+	audioContext *audio.Context
+	soundFile    string
 }
 
 var (
-	gameSpeed = int(240)
+	gameSpeed = int(1000)
 	visualizerBar *ebiten.Image
 	visualizerPosition = float64(0)
 	tickCount = int(0)
+	screenHeight = int(960)
+	screenY = float64(screenHeight)
 )
 
 type barStats struct {
@@ -50,7 +54,15 @@ func NewGame() *Game {
 }
 
 func (g *Game) Update() error { //game logic
-	
+
+	if g.sorted {
+		if tickCount%5 == 0 && g.fillIndex < len(g.data) {
+			g.fillIndex++
+		}
+		tickCount++
+		return nil
+	}
+
 	if ebiten.IsKeyPressed(ebiten.KeyArrowUp) {
 		gameSpeed = 3000
 	}
@@ -60,7 +72,7 @@ func (g *Game) Update() error { //game logic
 	}
 
 	if g.data == nil { // Initialize once
-		size := randInt(340, 340)
+		size := randInt(320,320)
 		g.data = make([]int, size)
 		for i := range g.data {
 			g.data[i] = randInt(1, 220)
@@ -72,7 +84,7 @@ func (g *Game) Update() error { //game logic
 		return nil
 	}
 
-	if g.data[g.j] < g.data[g.j+1] { //one comparison per tick
+	if g.data[g.j] > g.data[g.j+1] { //one comparison per tick
     g.data[g.j], g.data[g.j+1] = g.data[g.j+1], g.data[g.j]	
     // Create a new player for overlapping sound
     f, err := os.Open(g.soundFile)
@@ -100,24 +112,26 @@ func (g *Game) Update() error { //game logic
 		g.i++
 	}
 
-	if g.i >= len(g.data)-1 { // Fully sorted
+	if g.i >= len(g.data) - 1 { // Fully sorted
 		g.sorted = true
+		g.fillIndex = 0 // start from rightmost bar
 	}
 
 	return nil
 }
 
+
+
+
 func (g *Game) Draw(screen *ebiten.Image) {
-	
 	visualizerPosition = 0
 
 	for i := range g.data {
 		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Scale(0.01, float64(g.data[i])*0.01)
-		op.GeoM.Translate(float64(100*(visualizerPosition*0.01)), 0)
+		op.GeoM.Scale(0.01, float64(g.data[i]) * (-0.01))
+		op.GeoM.Translate(float64(100*(visualizerPosition*0.01)), (screenY/4))
 
-		// Tint bars green if sorted
-		if g.sorted {
+		if g.sorted && i < g.fillIndex { // Fill green 
 			op.ColorM.Scale(0, 1, 0, 1)
 		}
 
@@ -127,13 +141,14 @@ func (g *Game) Draw(screen *ebiten.Image) {
 }
 
 
+
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
 	return 320, 240
 }
 
 func main() {
 	ebiten.SetTPS(gameSpeed)
-	ebiten.SetWindowSize(1280, 960)
+	ebiten.SetWindowSize(1280, screenHeight)
 	ebiten.SetWindowTitle("Hello, World!")
 
 	game := NewGame() // <-- use the constructor

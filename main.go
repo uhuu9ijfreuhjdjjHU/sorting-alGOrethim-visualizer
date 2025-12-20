@@ -1,8 +1,12 @@
 package main
 
 import (
+	"time"
+	"strings"
+	"fmt"
 	"log"
 	"os"
+	"bufio"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/audio"
@@ -10,6 +14,25 @@ import (
 )
 
 const sampleRate = 104100
+
+func playSound(g *Game) {
+	f, err := os.Open(g.soundFile)
+	if err != nil {
+		return
+	}
+
+	stream, err := mp3.DecodeWithoutResampling(f)
+	if err != nil {
+		return
+	}
+
+	player, err := g.audioContext.NewPlayer(stream)
+	if err != nil {
+		return
+	}
+
+	player.Play()
+}
 
 type Game struct {
 	data []int
@@ -23,12 +46,18 @@ type Game struct {
 }
 
 var (
-	gameSpeed = int(1000)
+	muted = bool(false)
+	sortSelected = bool(false)
+	gameSpeed = int(300)
 	visualizerBar *ebiten.Image
 	visualizerPosition = float64(0)
 	tickCount = int(0)
 	screenHeight = int(960)
 	screenY = float64(screenHeight)
+	sortSelection rune
+	insortStepOne = bool(true)
+	insortStepTwo = bool(false)
+	insortStepThree = bool (false)
 )
 
 type barStats struct {
@@ -55,20 +84,43 @@ func NewGame() *Game {
 
 func (g *Game) Update() error { //game logic
 
+	if !sortSelected {
+		fmt.Println ("WARNING! LOWER VOLUME!")
+		
+		fmt.Println ("program will unlock in 3...")
+		time.Sleep(1 * time.Second)
+		fmt.Println ("program will unlock in 2...")
+		time.Sleep(1 * time.Second)
+		fmt.Println ("program will unlock in 1...")
+		time.Sleep(1 * time.Second)
+		playSound(g)
+
+		fmt.Println ("up key will mute, down key will unmute. muting may drastically increase performence with higher tps")
+		fmt.Println ("please select sorting algorithm:")
+		fmt.Println ("d.) double")
+		fmt.Println ("i.) insertion")
+
+		reader := bufio.NewReader(os.Stdin)
+		line, _ := reader.ReadString('\n')
+		sortSelection = rune(strings.TrimSpace(line)[0])
+
+		sortSelected = true
+	}
+
+	if ebiten.IsKeyPressed(ebiten.KeyArrowUp) {
+		muted = true
+	}
+	
+	if ebiten.IsKeyPressed(ebiten.KeyArrowDown) {
+		muted = false
+	}
+
 	if g.sorted {
 		if tickCount%5 == 0 && g.fillIndex < len(g.data) {
 			g.fillIndex++
 		}
 		tickCount++
 		return nil
-	}
-
-	if ebiten.IsKeyPressed(ebiten.KeyArrowUp) {
-		gameSpeed = 3000
-	}
-	
-	if ebiten.IsKeyPressed(ebiten.KeyArrowDown) {
-		gameSpeed = 120
 	}
 
 	if g.data == nil { // Initialize once
@@ -84,28 +136,45 @@ func (g *Game) Update() error { //game logic
 		return nil
 	}
 
-	if g.data[g.j] > g.data[g.j+1] { //one comparison per tick
-    g.data[g.j], g.data[g.j+1] = g.data[g.j+1], g.data[g.j]	
-    // Create a new player for overlapping sound
-    f, err := os.Open(g.soundFile)
-    if err != nil {
-      log.Println("failed to open sound:", err)
-    } else {
-      stream, err := mp3.DecodeWithoutResampling(f)
-      if err != nil {
-        log.Println("failed to decode sound:", err)
-      } else {
-        player, err := g.audioContext.NewPlayer(stream)
-        if err != nil {
-          log.Println("failed to create player:", err)
-        } else {
-          player.Play() // independent player, overlaps allowed
-        }
-      }
-  	}
+	if sortSelection == 'd' {
+		if g.data[g.j] > g.data[g.j+1] { //one comparison per tick
+    	g.data[g.j], g.data[g.j+1] = g.data[g.j+1], g.data[g.j]	
+			if !muted {
+				playSound(g)
+			}
+		}
+		g.j++ // Advance inner index
+	}	
+
+if sortSelection == 'i' {
+
+	// Initialize insertion sort
+	if g.i == 0 {
+		g.i = 1
+		g.j = g.i
 	}
 
-	g.j++ // Advance inner index
+	// If done
+	if g.i >= len(g.data) {
+		g.sorted = true
+		return nil
+	}
+
+	// One comparison per tick
+	if g.j > 0 && g.data[g.j] < g.data[g.j-1] {
+		g.data[g.j], g.data[g.j-1] = g.data[g.j-1], g.data[g.j]
+		g.j-- // move left
+		if !muted {
+			playSound(g)
+		}
+		return nil
+	}
+
+	// Element is placed, move to next i
+	g.i++
+	g.j = g.i
+	return nil
+}
 
 	if g.j >= len(g.data)-g.i-1 {	// End of inner pass
 		g.j = 0
@@ -114,14 +183,12 @@ func (g *Game) Update() error { //game logic
 
 	if g.i >= len(g.data) - 1 { // Fully sorted
 		g.sorted = true
+
 		g.fillIndex = 0 // start from rightmost bar
 	}
 
 	return nil
 }
-
-
-
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	visualizerPosition = 0
@@ -139,8 +206,6 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		visualizerPosition++
 	}
 }
-
-
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
 	return 320, 240
